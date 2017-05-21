@@ -1,0 +1,304 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="Keywords" content="blog"/>
+    <meta name="Description" content="blog"/>
+    <title>Simple</title>
+    <link rel="shortcut icon" href="/static/favicon.png"/>
+    <link rel="stylesheet" type="text/css" href="/main.css" />
+</head>
+<body>
+<div class="main">
+    <div class="header">
+    	<ul id="pages">
+            <li><a href="/">home</a></li>
+            <li><a href="/#/tags">tags</a></li>
+            <li><a href="/#/archive">archive</a></li>
+    	</ul>
+    </div>
+	<div class="wrap-header">
+	<h1>
+    <a href="/" id="title"></a>
+	</h1>
+	</div>
+<div id="md" style="display: none;">
+<!-- markdown -->
+在oldlinux论坛中，有一则帖子，题目也是“关于fork函数的使用问题”，楼主提出了一个很有意思的问题：
+
+```
+在linux0.11下写了一个程序,大家看一下，应该是什么结果 
+#include 
+#include 
+main() 
+{ 
+    int pid, i; 
+    for (i=0; i<2; i++)
+    { 
+        pid=fork(); 
+        if(pid==0) 
+            printf(“child=%d\n”,i); 
+        else 
+            printf(“parent=%d\n”,i); 
+    } 
+}
+```
+而在2楼，楼主给出了打印结果：
+```
+我运行后的结果 
+parent=0 
+parent=1 
+child=1 
+child=0 
+parent=1 
+child=1 
+为什么会打印出三个parent,三个child呢？
+```
+对于打印情况，3楼给出了一个合理的解释：
+```
+i=0： fork之后产生两个进程，分别打印“XXX＝0” 
+i=1： 上面的两个进程又fork，这时4个进程了，再分别打印“XXX＝1” 
+所以一共打印6句话，2句打印0，4句打印1
+```
+这个解释虽然合理，但是不够详尽，所以容易造成一知半解。而且，无法充分解释打印顺序。 
+
+我在这里给出一个更详尽的解释： 
+
+首先，有几个前提需要指明： 
+
+1. fork()函数只是创建了当前进程的子进程，返回值为子进程的pid。而且并不会立即调用子进程。 
+
+2. fork()函数创建了子进程后，子进程保存的是进入创建进程时的父进程的运行环境。换句话说，子进程被创建后第一次运行时，是从fork()指令在机器码程序中的下一条指令开始执行的。在目前我们讨论的程序中，子程序是从if(pid==0) 这一个指令开始执行。而且，子进程在创建后的返回值总是0，所以子进程一定会运行printf("child=%d\n",i);。 
+
+3. 目前我从Linux 0.11版本中了解的进程调度前提有如下几个： 
+ * ) 定时器中断造成进程调度 
+ * ) 当前进程运行结束后造成进程调度 
+ * ) 当前进程挂起后造成进程调度 
+4. 进程调度的逻辑如下：当前进程不为就绪态，或者当前进程在就绪态但是剩余运行时间不是最大值，就会运行另一个进程，否则，会运行当前进程。
+
+那我们再来看帖子中楼主给出的程序主体部分： 
+```
+for(i=0;i<2;i++) {
+    pid=fork();
+    if(pid==0) printf("child=%d\n",i);
+    else printf("parent=%d\n",i);
+}
+```
+我们把这个循环展开，可以有如下代码段2： 
+```
+ 1: i=0;
+ 2: pid=fork();
+ 3: if(pid==0) 
+ 4:     printf("child=%d\n",i);
+ 5: else 
+ 6:     printf("parent=%d\n",i);
+ 7: i=1;
+ 8: pid=fork();
+ 9: if(pid==0) 
+10:     printf("child=%d\n",i);
+11: else 
+12:     printf("parent=%d\n",i);
+13: //当前进程结束
+```
+
+在详细解释之前，我们先假设运行这段代码的进程的pid为1。根据展开后的代码有如下分析。 
+
+1. 进程1运行到第2行时，就会通过fork()创建一个子进程，其pid为2。fork()的返回值也就是2。这时并不会立即调用进程2。 
+
+2. 进程1继续运行到第3行，判断到返回值不为0，则运行第6行，打印 parent=0 
+
+3. 进程1继续运行到第8行，又会通过fork()创建一个子进程，其pid为3。fork()的返回值也就是3。同样这里并不会立即调用进程3。 
+
+4. 进程1继续运行到第9行，判断到返回值不为0，则运行第12行，打印parent=1 
+
+5. 进程1结束。此时会触发前提3中的进程调度。这时，候补进程有2个，pid分别为2和3。需要注意的是，进程3创建时间晚于进程2，那么它的剩余时间就大于进程2，所以会先调用进程3。根据前提2中的描述，我们得知进程3从第9行开始运行，其返回值为0，则运行第10行，打印child=1 
+
+6. 进程3结束。此时会再次触发进程调度。这时只有进程2在等待，那么就调用进程2。由于进程2是在第2行中创建的，所以调用时就从第3行开始执行，返回值为0，继续运行第4行，打印child=0 
+
+7. 进程2继续执行，到第8行时，进程2会通过fork()创建一个子进程，如果之前死去的进程3并未被完全释放，那么pid会是4。 
+
+8. 进程2执行到第9行，判断返回值为4，那么执行第12行，打印parent=1 
+
+9. 进行2结束。然后继续出发进程调度，此时进行4在等待，那么调用进程4。从第9行开始执行，其返回值为0，则运行第10行，打印child=1
+
+这里讨论的结果并未涉及到定时器中断导致的进程调度。如果程序运行时刚好遇到定时器中断，那么打印结果肯定是另一种。这要根据定时器中断触发的位置来进行分析。
+
+刚好又看到一篇类似的面试题，链接如下：http://www.cnblogs.com/vanishfan/archive/2012/11/01/2750157.html 
+
+帖子中的问题在我讨论的基础上又加入了块设备的输出问题。
+<!-- markdown end -->
+</div>
+<div class="entry" id="main">
+<!-- content -->
+<p>在oldlinux论坛中，有一则帖子，题目也是“关于fork函数的使用问题”，楼主提出了一个很有意思的问题：</p>
+
+<pre><code>在linux0.11下写了一个程序,大家看一下，应该是什么结果 
+#include 
+#include 
+main() 
+{ 
+    int pid, i; 
+    for (i=0; i&lt;2; i++)
+    { 
+        pid=fork(); 
+        if(pid==0) 
+            printf(“child=%d\n”,i); 
+        else 
+            printf(“parent=%d\n”,i); 
+    } 
+}
+</code></pre>
+
+<p>而在2楼，楼主给出了打印结果：</p>
+
+<pre><code>我运行后的结果 
+parent=0 
+parent=1 
+child=1 
+child=0 
+parent=1 
+child=1 
+为什么会打印出三个parent,三个child呢？
+</code></pre>
+
+<p>对于打印情况，3楼给出了一个合理的解释：</p>
+
+<pre><code>i=0： fork之后产生两个进程，分别打印“XXX＝0” 
+i=1： 上面的两个进程又fork，这时4个进程了，再分别打印“XXX＝1” 
+所以一共打印6句话，2句打印0，4句打印1
+</code></pre>
+
+<p>这个解释虽然合理，但是不够详尽，所以容易造成一知半解。而且，无法充分解释打印顺序。 </p>
+
+<p>我在这里给出一个更详尽的解释： </p>
+
+<p>首先，有几个前提需要指明： </p>
+
+<ol>
+<li><p>fork()函数只是创建了当前进程的子进程，返回值为子进程的pid。而且并不会立即调用子进程。 </p></li>
+<li><p>fork()函数创建了子进程后，子进程保存的是进入创建进程时的父进程的运行环境。换句话说，子进程被创建后第一次运行时，是从fork()指令在机器码程序中的下一条指令开始执行的。在目前我们讨论的程序中，子程序是从if(pid==0) 这一个指令开始执行。而且，子进程在创建后的返回值总是0，所以子进程一定会运行printf("child=%d\n",i);。 </p></li>
+<li><p>目前我从Linux 0.11版本中了解的进程调度前提有如下几个： </p>
+
+<ul><li>) 定时器中断造成进程调度 </li>
+<li>) 当前进程运行结束后造成进程调度 </li>
+<li>) 当前进程挂起后造成进程调度 </li></ul></li>
+<li>进程调度的逻辑如下：当前进程不为就绪态，或者当前进程在就绪态但是剩余运行时间不是最大值，就会运行另一个进程，否则，会运行当前进程。</li>
+</ol>
+
+<p>那我们再来看帖子中楼主给出的程序主体部分： </p>
+
+<pre><code>for(i=0;i&lt;2;i++) {
+    pid=fork();
+    if(pid==0) printf("child=%d\n",i);
+    else printf("parent=%d\n",i);
+}
+</code></pre>
+
+<p>我们把这个循环展开，可以有如下代码段2： </p>
+
+<pre><code> 1: i=0;
+ 2: pid=fork();
+ 3: if(pid==0) 
+ 4:     printf("child=%d\n",i);
+ 5: else 
+ 6:     printf("parent=%d\n",i);
+ 7: i=1;
+ 8: pid=fork();
+ 9: if(pid==0) 
+10:     printf("child=%d\n",i);
+11: else 
+12:     printf("parent=%d\n",i);
+13: //当前进程结束
+</code></pre>
+
+<p>在详细解释之前，我们先假设运行这段代码的进程的pid为1。根据展开后的代码有如下分析。 </p>
+
+<ol>
+<li><p>进程1运行到第2行时，就会通过fork()创建一个子进程，其pid为2。fork()的返回值也就是2。这时并不会立即调用进程2。 </p></li>
+<li><p>进程1继续运行到第3行，判断到返回值不为0，则运行第6行，打印 parent=0 </p></li>
+<li><p>进程1继续运行到第8行，又会通过fork()创建一个子进程，其pid为3。fork()的返回值也就是3。同样这里并不会立即调用进程3。 </p></li>
+<li><p>进程1继续运行到第9行，判断到返回值不为0，则运行第12行，打印parent=1 </p></li>
+<li><p>进程1结束。此时会触发前提3中的进程调度。这时，候补进程有2个，pid分别为2和3。需要注意的是，进程3创建时间晚于进程2，那么它的剩余时间就大于进程2，所以会先调用进程3。根据前提2中的描述，我们得知进程3从第9行开始运行，其返回值为0，则运行第10行，打印child=1 </p></li>
+<li><p>进程3结束。此时会再次触发进程调度。这时只有进程2在等待，那么就调用进程2。由于进程2是在第2行中创建的，所以调用时就从第3行开始执行，返回值为0，继续运行第4行，打印child=0 </p></li>
+<li><p>进程2继续执行，到第8行时，进程2会通过fork()创建一个子进程，如果之前死去的进程3并未被完全释放，那么pid会是4。 </p></li>
+<li><p>进程2执行到第9行，判断返回值为4，那么执行第12行，打印parent=1 </p></li>
+<li><p>进行2结束。然后继续出发进程调度，此时进行4在等待，那么调用进程4。从第9行开始执行，其返回值为0，则运行第10行，打印child=1</p></li>
+</ol>
+
+<p>这里讨论的结果并未涉及到定时器中断导致的进程调度。如果程序运行时刚好遇到定时器中断，那么打印结果肯定是另一种。这要根据定时器中断触发的位置来进行分析。</p>
+
+<p>刚好又看到一篇类似的面试题，链接如下：http://www.cnblogs.com/vanishfan/archive/2012/11/01/2750157.html </p>
+
+<p>帖子中的问题在我讨论的基础上又加入了块设备的输出问题。</p>
+<!-- content end -->
+</div>
+<br>
+<br>
+    <div id="disqus_thread"></div>
+	<div class="footer">
+		<p>© Copyright 2014 by isnowfy, Designed by isnowfy</p>
+	</div>
+</div>
+<script src="main.js"></script>
+<script id="content" type="text/mustache">
+    <h1>{{title}}</h1>
+    <div class="tag">
+    {{date}}
+    {{#tags}}
+    <a href="/#/tag/{{name}}">#{{name}}</a>
+    {{/tags}}
+    </div>
+</script>
+<script id="pagesTemplate" type="text/mustache">
+    {{#pages}}
+    <li>
+        <a href="{{path}}">{{title}}</a>
+    </li>
+    {{/pages}}
+</script>
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: "main.json",
+        type: "GET",
+        dataType: "json",
+        success: function(data) {
+            $("#title").html(data.name);
+            var pagesTemplate = Hogan.compile($("#pagesTemplate").html());
+            var pagesHtml = pagesTemplate.render({"pages": data.pages});
+            $("#pages").append(pagesHtml);
+            //path
+            var path = "process_create.html";
+            //path end
+            var now = 0;
+            for (var i = 0; i < data.posts.length; ++i)
+                if (path == data.posts[i].path)
+                    now = i;
+            var post = data.posts[now];
+            var tmp = post.tags.split(" ");
+            var tags = [];
+            for (var i = 0; i < tmp.length; ++i)
+                if (tmp[i].length > 0)
+                    tags.push({"name": tmp[i]});
+            var contentTemplate = Hogan.compile($("#content").html());
+            var contentHtml = contentTemplate.render({"title": post.title, "tags": tags, "date": post.date});
+            $("#main").prepend(contentHtml);
+            if (data.disqus_shortname.length > 0) {
+                var disqus_shortname = data.disqus_shortname;
+                (function() {
+                    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                })();
+            }
+        }
+    });
+});
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ["\\(", "\\)"]], processEscapes: true}});
+</script>
+</body>
+</html>
