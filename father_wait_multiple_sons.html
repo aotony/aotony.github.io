@@ -1,0 +1,224 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="Keywords" content="blog"/>
+    <meta name="Description" content="blog"/>
+    <title>Simple</title>
+    <link rel="shortcut icon" href="/static/favicon.png"/>
+    <link rel="stylesheet" type="text/css" href="/main.css" />
+</head>
+<body>
+<div class="main">
+    <div class="header">
+    	<ul id="pages">
+            <li><a href="/">home</a></li>
+            <li><a href="/#/tags">tags</a></li>
+            <li><a href="/#/archive">archive</a></li>
+    	</ul>
+    </div>
+	<div class="wrap-header">
+	<h1>
+    <a href="/" id="title"></a>
+	</h1>
+	</div>
+<div id="md" style="display: none;">
+<!-- markdown -->
+在linux 0.11中，父进程等待子进程结束有如下方式：
+
+```c
+	if (!(pid=fork())) {
+		close(0);
+		if (open("/etc/rc",O_RDONLY,0))
+			_exit(1);
+		execve("/bin/sh",argv_rc,envp_rc);
+		_exit(2);
+	}
+	if (pid>0)
+		while (pid != wait(&i))
+			/* nothing */;
+```
+
+在第一个if语句中，执行子进行的内容。
+在第二个语句中，父进行只是单纯的等待刚才fork出的子进行。子进程执行完毕后就会退出while循环。
+
+但如果要等待多个子进程的执行呢？
+
+按照如上的方式，必须要记录下每个子进程的pid号，然后进行等待子进程退出。
+
+创建子进程的方式比较简单，可以参考创建单个子进程的方式，子进程执行完毕后退出即可。
+
+等待子进程退出的方式比较复杂。
+
+这里我定义了一个结构体st_child_processes用来记录子进程的相关信息
+
+```c
+typedef struct tag_process_basic_info
+{
+	int i_pid;
+	int i_has_exit;
+	int i_exit_code;
+}PROCESS_BASIC_S;
+
+PROCESS_BASIC_S st_child_processes[i_processes_num];
+```
+
+
+```c
+	while ((i_current_finish_pid = wait(&i_current_exit_code)) > 0)
+	{
+		for (i_loop = 0; i_loop < i_processes_num; i_loop++)
+		{
+			/* 如果进行已经退出，则不需要再判断 */
+			if (st_child_processes[i_loop].i_has_exit == 1)
+			{
+				continue;
+			}
+
+			if (st_child_processes[i_loop].i_pid == i_current_finish_pid)
+			{
+				st_child_processes[i_loop].i_has_exit = 1;
+				st_child_processes[i_loop].i_exit_code = i_current_exit_code;
+				printf("child process[%d] [%d] finished, exit code[%d]\n",
+					   i_loop, i_current_finish_pid, i_current_exit_code);
+			}
+		}
+	}
+```
+
+注意，不同的子函数退出顺序不一定和创建顺序一致。所以不要在内部的for循环中判断子wait()是否和子进行pid相同。
+<!-- markdown end -->
+</div>
+<div class="entry" id="main">
+<!-- content -->
+<p>在linux 0.11中，父进程等待子进程结束有如下方式：</p>
+
+<pre><code class="c">    if (!(pid=fork())) {
+        close(0);
+        if (open("/etc/rc",O_RDONLY,0))
+            _exit(1);
+        execve("/bin/sh",argv_rc,envp_rc);
+        _exit(2);
+    }
+    if (pid&gt;0)
+        while (pid != wait(&amp;i))
+            /* nothing */;
+</code></pre>
+
+<p>在第一个if语句中，执行子进行的内容。
+在第二个语句中，父进行只是单纯的等待刚才fork出的子进行。子进程执行完毕后就会退出while循环。</p>
+
+<p>但如果要等待多个子进程的执行呢？</p>
+
+<p>按照如上的方式，必须要记录下每个子进程的pid号，然后进行等待子进程退出。</p>
+
+<p>创建子进程的方式比较简单，可以参考创建单个子进程的方式，子进程执行完毕后退出即可。</p>
+
+<p>等待子进程退出的方式比较复杂。</p>
+
+<p>这里我定义了一个结构体st<em>child</em>processes用来记录子进程的相关信息</p>
+
+<pre><code class="c">typedef struct tag_process_basic_info
+{
+    int i_pid;
+    int i_has_exit;
+    int i_exit_code;
+}PROCESS_BASIC_S;
+
+PROCESS_BASIC_S st_child_processes[i_processes_num];
+</code></pre>
+
+<pre><code class="c">    while ((i_current_finish_pid = wait(&amp;i_current_exit_code)) &gt; 0)
+    {
+        for (i_loop = 0; i_loop &lt; i_processes_num; i_loop++)
+        {
+            /* 如果进行已经退出，则不需要再判断 */
+            if (st_child_processes[i_loop].i_has_exit == 1)
+            {
+                continue;
+            }
+
+            if (st_child_processes[i_loop].i_pid == i_current_finish_pid)
+            {
+                st_child_processes[i_loop].i_has_exit = 1;
+                st_child_processes[i_loop].i_exit_code = i_current_exit_code;
+                printf("child process[%d] [%d] finished, exit code[%d]\n",
+                       i_loop, i_current_finish_pid, i_current_exit_code);
+            }
+        }
+    }
+</code></pre>
+
+<p>注意，不同的子函数退出顺序不一定和创建顺序一致。所以不要在内部的for循环中判断子wait()是否和子进行pid相同。</p>
+<!-- content end -->
+</div>
+<br>
+<br>
+    <div id="disqus_thread"></div>
+	<div class="footer">
+		<p>© Copyright 2014 by isnowfy, Designed by isnowfy</p>
+	</div>
+</div>
+<script src="main.js"></script>
+<script id="content" type="text/mustache">
+    <h1>{{title}}</h1>
+    <div class="tag">
+    {{date}}
+    {{#tags}}
+    <a href="/#/tag/{{name}}">#{{name}}</a>
+    {{/tags}}
+    </div>
+</script>
+<script id="pagesTemplate" type="text/mustache">
+    {{#pages}}
+    <li>
+        <a href="{{path}}">{{title}}</a>
+    </li>
+    {{/pages}}
+</script>
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: "main.json",
+        type: "GET",
+        dataType: "json",
+        success: function(data) {
+            $("#title").html(data.name);
+            var pagesTemplate = Hogan.compile($("#pagesTemplate").html());
+            var pagesHtml = pagesTemplate.render({"pages": data.pages});
+            $("#pages").append(pagesHtml);
+            //path
+            var path = "father_wait_multiple_sons.html";
+            //path end
+            var now = 0;
+            for (var i = 0; i < data.posts.length; ++i)
+                if (path == data.posts[i].path)
+                    now = i;
+            var post = data.posts[now];
+            var tmp = post.tags.split(" ");
+            var tags = [];
+            for (var i = 0; i < tmp.length; ++i)
+                if (tmp[i].length > 0)
+                    tags.push({"name": tmp[i]});
+            var contentTemplate = Hogan.compile($("#content").html());
+            var contentHtml = contentTemplate.render({"title": post.title, "tags": tags, "date": post.date});
+            $("#main").prepend(contentHtml);
+            if (data.disqus_shortname.length > 0) {
+                var disqus_shortname = data.disqus_shortname;
+                (function() {
+                    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                })();
+            }
+        }
+    });
+});
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ["\\(", "\\)"]], processEscapes: true}});
+</script>
+</body>
+</html>
