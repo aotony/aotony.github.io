@@ -1,0 +1,145 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="Keywords" content="blog"/>
+    <meta name="Description" content="blog"/>
+    <title>Simple</title>
+    <link rel="shortcut icon" href="/static/favicon.png"/>
+    <link rel="stylesheet" type="text/css" href="/main.css" />
+</head>
+<body>
+<div class="main">
+    <div class="header">
+    	<ul id="pages">
+            <li><a href="/">home</a></li>
+            <li><a href="/#/tags">tags</a></li>
+            <li><a href="/#/archive">archive</a></li>
+    	</ul>
+    </div>
+	<div class="wrap-header">
+	<h1>
+    <a href="/" id="title"></a>
+	</h1>
+	</div>
+<div id="md" style="display: none;">
+<!-- markdown -->
+防范式编程：函数入参的判断及错误入参的处理
+
+* 断言assert： 建议只在开发维护阶段使用。目前项目中并未使用断言。
+* 错误处理：
+ 1. 返回中立值
+ 2. 换用下一个正确的数据 -- 可能是数据库处理时的选择方式
+ 3. 返回与前次相同的数据
+ 4. 换用最接近的合法值
+ 5. 记录告警信息
+ 6. 返回一个错误码 -- 错误码是目前代码中使用的处理方式
+ 7. 调用错误处理子程序或对象
+ 8. 显示出错消息 -- 在程序需要时会显示到界面上，但并非每个地方都会显示
+ 9. 用最妥当的方式在局部处理错误
+ 10. 关闭程序 -- 这个应该是下下策
+* 异常：C语音不支持。
+* 隔离程序，以避免错误造成的损害：例如在需要将外部的输入字符串进行打包输出时，不要直接调用外部输入的指针，而要通过printf(“%s”, psInput)的方式，将外部输入的内容打印到输出上。这样可以避免外部构造字符串时将内存中内容打印到外部。
+* 辅助调试手段：
+ 1. 尽早引入辅助调试的代码 -- 对于产品来说，将适当的内容输出到界面上是一种调试手段
+ 2. 采用进攻式编程 -- 采用记录lastword方式，将异常情况记录下来。便于后续问题分析定位
+
+
+
+<!-- markdown end -->
+</div>
+<div class="entry" id="main">
+<!-- content -->
+<p>防范式编程：函数入参的判断及错误入参的处理</p>
+
+<ul>
+<li>断言assert： 建议只在开发维护阶段使用。目前项目中并未使用断言。</li>
+<li>错误处理：
+<ol><li>返回中立值</li>
+<li>换用下一个正确的数据 -- 可能是数据库处理时的选择方式</li>
+<li>返回与前次相同的数据</li>
+<li>换用最接近的合法值</li>
+<li>记录告警信息</li>
+<li>返回一个错误码 -- 错误码是目前代码中使用的处理方式</li>
+<li>调用错误处理子程序或对象</li>
+<li>显示出错消息 -- 在程序需要时会显示到界面上，但并非每个地方都会显示</li>
+<li>用最妥当的方式在局部处理错误</li>
+<li>关闭程序 -- 这个应该是下下策</li></ol></li>
+<li>异常：C语音不支持。</li>
+<li>隔离程序，以避免错误造成的损害：例如在需要将外部的输入字符串进行打包输出时，不要直接调用外部输入的指针，而要通过printf(“%s”, psInput)的方式，将外部输入的内容打印到输出上。这样可以避免外部构造字符串时将内存中内容打印到外部。</li>
+<li>辅助调试手段：
+<ol><li>尽早引入辅助调试的代码 -- 对于产品来说，将适当的内容输出到界面上是一种调试手段</li>
+<li>采用进攻式编程 -- 采用记录lastword方式，将异常情况记录下来。便于后续问题分析定位</li></ol></li>
+</ul>
+<!-- content end -->
+</div>
+<br>
+<br>
+    <div id="disqus_thread"></div>
+	<div class="footer">
+		<p>© Copyright 2014 by isnowfy, Designed by isnowfy</p>
+	</div>
+</div>
+<script src="main.js"></script>
+<script id="content" type="text/mustache">
+    <h1>{{title}}</h1>
+    <div class="tag">
+    {{date}}
+    {{#tags}}
+    <a href="/#/tag/{{name}}">#{{name}}</a>
+    {{/tags}}
+    </div>
+</script>
+<script id="pagesTemplate" type="text/mustache">
+    {{#pages}}
+    <li>
+        <a href="{{path}}">{{title}}</a>
+    </li>
+    {{/pages}}
+</script>
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: "main.json",
+        type: "GET",
+        dataType: "json",
+        success: function(data) {
+            $("#title").html(data.name);
+            var pagesTemplate = Hogan.compile($("#pagesTemplate").html());
+            var pagesHtml = pagesTemplate.render({"pages": data.pages});
+            $("#pages").append(pagesHtml);
+            //path
+            var path = "defensive_programming.html";
+            //path end
+            var now = 0;
+            for (var i = 0; i < data.posts.length; ++i)
+                if (path == data.posts[i].path)
+                    now = i;
+            var post = data.posts[now];
+            var tmp = post.tags.split(" ");
+            var tags = [];
+            for (var i = 0; i < tmp.length; ++i)
+                if (tmp[i].length > 0)
+                    tags.push({"name": tmp[i]});
+            var contentTemplate = Hogan.compile($("#content").html());
+            var contentHtml = contentTemplate.render({"title": post.title, "tags": tags, "date": post.date});
+            $("#main").prepend(contentHtml);
+            if (data.disqus_shortname.length > 0) {
+                var disqus_shortname = data.disqus_shortname;
+                (function() {
+                    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+                    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+                })();
+            }
+        }
+    });
+});
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ["\\(", "\\)"]], processEscapes: true}});
+</script>
+</body>
+</html>
